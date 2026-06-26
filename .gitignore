@@ -1,0 +1,23 @@
+# ── Environment & secrets ────────────────────────────────────────
+server/.env
+client/.env
+client/.env.local
+*.env.local
+
+# ── Dependencies ─────────────────────────────────────────────────
+node_modules/
+*/node_modules/
+
+# ── Build outputs ─────────────────────────────────────────────────
+client/dist/
+client/build/
+
+# ── OS & editor ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+*.log
+npm-debug.log*
+
+# ── Uploads / generated ───────────────────────────────────────────
+server/public/audio/*.wav
