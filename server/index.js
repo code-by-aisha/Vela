@@ -49,10 +49,13 @@ if (process.env.NODE_ENV === 'production' &&
 }
 
 const app    = express();
-app.set('trust proxy', 1);
 const server = http.createServer(app);
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+// In production CLIENT_URL may be a comma-separated list of allowed origins
+// e.g. CLIENT_URL=https://vela-app.vercel.app,https://www.vela-app.vercel.app
+const _raw = process.env.CLIENT_URL || 'http://localhost:5173';
+const CLIENT_URL  = _raw.split(',').map(s => s.trim()).filter(Boolean);
+const CLIENT_URL_SINGLE = CLIENT_URL[0]; // for places that need a single string
 const PORT       = process.env.PORT        || 5000;
 const isProd     = process.env.NODE_ENV === 'production';
 
@@ -109,7 +112,22 @@ app.use('/api/auth', authLimiter);
 app.use('/api',      apiLimiter);
 
 // ── Core middleware ───────────────────────────────────────────────────────────
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
+// CORS: support multiple origins (Vercel preview URLs, custom domains, localhost)
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return cb(null, true);
+    if (CLIENT_URL.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
+      return cb(null, true);
+    }
+    // In dev, allow all localhost origins
+    if (!isProd && (origin.startsWith('http://localhost') || origin.startsWith('http://127'))) {
+      return cb(null, true);
+    }
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));        // was 50mb — tightened
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());

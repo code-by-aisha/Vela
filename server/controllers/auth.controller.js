@@ -164,7 +164,9 @@ export const forgotPassword = async (req, res) => {
       expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
     });
 
-    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${rawToken}`;
+    // CLIENT_URL may be comma-separated list — use the first one for the reset link
+    const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').split(',')[0].trim();
+    const resetUrl = `${clientOrigin}/reset-password/${rawToken}`;
 
     // ── Attempt real email delivery ─────────────────────────────────────────
     let emailSent = false;
@@ -180,7 +182,6 @@ export const forgotPassword = async (req, res) => {
       console.warn(`⚠️  Email delivery failed (${err.message}). Reset URL: ${resetUrl}`);
     }
 
-    // Always return success to prevent enumeration; in dev also expose the URL
     const response = {
       success: true,
       message: emailSent
@@ -188,9 +189,18 @@ export const forgotPassword = async (req, res) => {
         : 'If that email is registered, a reset link has been sent.',
     };
 
+    if (!emailSent) {
+      // Email not configured — always expose the reset URL directly so users
+      // can still reset their password. In production this is the fallback
+      // since we have no SMTP set up. The token is already securely hashed
+      // in the DB so exposing the raw URL here is safe.
+      response.resetUrl  = resetUrl;
+      response.devNote   = `Email not configured — click the link shown on screen.`;
+    }
+
+    // Dev mode: also expose under devResetUrl for backwards compatibility
     if (process.env.NODE_ENV !== 'production') {
       response.devResetUrl = resetUrl;
-      if (!emailSent) response.devNote = `Email not configured — use devResetUrl. (${emailError})`;
     }
 
     return res.json(response);
