@@ -69,6 +69,26 @@ const io = new Server(server, { cors: { origin: CLIENT_URL, credentials: true } 
 initSocket(io, app);
 app.set('io', io); // so controllers can do req.app.get('io')
 
+// ── CORS MUST BE FIRST — before rate limiters, before everything ─────────────
+// If CORS comes after rate limiters, blocked requests never get CORS headers
+// and the browser shows a CORS error instead of the real error
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (origin.endsWith('.vercel.app')) return cb(null, true);
+    if (CLIENT_URL.some(u => u === origin)) return cb(null, true);
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
+    if (origin.endsWith('.railway.app')) return cb(null, true);
+    cb(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
+}));
+
+// Cookie parser must also be early
+app.use(cookieParser());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -117,37 +137,8 @@ app.use('/api/auth', authLimiter);
 app.use('/api',      apiLimiter);
 
 // ── Core middleware ───────────────────────────────────────────────────────────
-// CORS — simplified and robust for Railway ↔ Vercel cross-domain
-app.use(cors({
-  origin: (origin, cb) => {
-    // No origin = mobile app, curl, server-to-server → always allow
-    if (!origin) return cb(null, true);
-    // Allow any vercel.app subdomain (covers preview + production deployments)
-    if (origin.endsWith('.vercel.app')) return cb(null, true);
-    // Allow exact CLIENT_URL matches
-    if (CLIENT_URL.some(u => u === origin)) return cb(null, true);
-    // Allow localhost in development
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
-    // Allow railway.app for internal calls
-    if (origin.endsWith('.railway.app')) return cb(null, true);
-    cb(new Error(`CORS blocked: ${origin}`));
-  },
-  credentials: true,
-  exposedHeaders: ['Set-Cookie'],
-}));
-
-// Extra headers to ensure cookies work cross-domain
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-  next();
-});
-app.use(express.json({ limit: '10mb' }));        // was 50mb — tightened
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser());
+// CORS registered above before helmet
+// body parsers and cookieParser registered above
 
 // ── Serve local audio files with CORS headers ─────────────────────────────────
 app.use('/audio', (req, res, next) => {
