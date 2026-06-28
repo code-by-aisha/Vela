@@ -1,21 +1,19 @@
 import jwt from 'jsonwebtoken';
 
-const isProd = process.env.NODE_ENV === 'production';
-
 export const generateToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
 export const setTokenCookie = (res, token) => {
+  // ALWAYS use SameSite=None + Secure in production (Railway + Vercel are different domains)
+  // This is required for ANY cross-domain cookie to work in modern browsers
+  const isProd = process.env.NODE_ENV === 'production';
+  
   res.cookie('vela_token', token, {
     httpOnly: true,
-    // CRITICAL FIX: cross-domain (Railway ↔ Vercel) requires:
-    //   secure: true  — cookie only sent over HTTPS
-    //   sameSite: 'none' — allows cross-site requests (Vercel → Railway)
-    // In dev: secure:false + sameSite:'lax' (localhost, same origin via proxy)
-    secure:   isProd,
-    sameSite: isProd ? 'none' : 'lax',
-    maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days
+    secure:   true,          // Always true — Railway serves HTTPS
+    sameSite: 'none',        // Always none — cross-domain between Railway and Vercel
+    maxAge:   7 * 24 * 60 * 60 * 1000,
     path:     '/',
   });
 };
@@ -23,8 +21,8 @@ export const setTokenCookie = (res, token) => {
 export const clearTokenCookie = (res) => {
   res.clearCookie('vela_token', {
     httpOnly: true,
-    secure:   isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure:   true,
+    sameSite: 'none',
     path:     '/',
   });
 };

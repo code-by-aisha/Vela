@@ -117,22 +117,34 @@ app.use('/api/auth', authLimiter);
 app.use('/api',      apiLimiter);
 
 // ── Core middleware ───────────────────────────────────────────────────────────
-// CORS: support multiple origins (Vercel preview URLs, custom domains, localhost)
+// CORS — simplified and robust for Railway ↔ Vercel cross-domain
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    // No origin = mobile app, curl, server-to-server → always allow
     if (!origin) return cb(null, true);
-    if (CLIENT_URL.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
-      return cb(null, true);
-    }
-    // In dev, allow all localhost origins
-    if (!isProd && (origin.startsWith('http://localhost') || origin.startsWith('http://127'))) {
-      return cb(null, true);
-    }
-    cb(new Error(`CORS: origin ${origin} not allowed`));
+    // Allow any vercel.app subdomain (covers preview + production deployments)
+    if (origin.endsWith('.vercel.app')) return cb(null, true);
+    // Allow exact CLIENT_URL matches
+    if (CLIENT_URL.some(u => u === origin)) return cb(null, true);
+    // Allow localhost in development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
+    // Allow railway.app for internal calls
+    if (origin.endsWith('.railway.app')) return cb(null, true);
+    cb(new Error(`CORS blocked: ${origin}`));
   },
   credentials: true,
+  exposedHeaders: ['Set-Cookie'],
 }));
+
+// Extra headers to ensure cookies work cross-domain
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  next();
+});
 app.use(express.json({ limit: '10mb' }));        // was 50mb — tightened
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
