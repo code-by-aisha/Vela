@@ -35,12 +35,25 @@ function getTransporter() {
     throw new Error('Email service not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env');
   }
 
+  const port   = parseInt(SMTP_PORT || '587');
+  const secure = SMTP_SECURE === 'true';   // true = SSL port 465, false = STARTTLS port 587
+
   _transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: parseInt(SMTP_PORT || '587'),
-    secure: SMTP_SECURE === 'true',  // true → SSL (465), false → STARTTLS (587)
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-    tls: { rejectUnauthorized: false },  // allow self-signed certs in dev
+    host:   SMTP_HOST,
+    port,
+    secure,
+    auth:   { user: SMTP_USER, pass: SMTP_PASS },
+    // Required for Railway — longer timeouts + force IPv4
+    connectionTimeout: 10000,
+    greetingTimeout:   10000,
+    socketTimeout:     15000,
+    tls: {
+      rejectUnauthorized: false,
+      // Force TLS 1.2+ for Gmail compatibility
+      minVersion: 'TLSv1.2',
+    },
+    // Force IPv4 — Railway sometimes routes IPv6 which Gmail blocks
+    family: 4,
   });
 
   return _transporter;

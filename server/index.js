@@ -59,6 +59,11 @@ const CLIENT_URL_SINGLE = CLIENT_URL[0]; // for places that need a single string
 const PORT       = process.env.PORT        || 5000;
 const isProd     = process.env.NODE_ENV === 'production';
 
+// CRITICAL for Railway/Heroku/any reverse proxy:
+// Without this, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// and cookies may not work correctly behind the proxy
+if (isProd) app.set('trust proxy', 1);
+
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 const io = new Server(server, { cors: { origin: CLIENT_URL, credentials: true } });
 initSocket(io, app);
