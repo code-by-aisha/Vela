@@ -92,31 +92,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'"],   // needed for Vite HMR in dev
-      styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:         ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://res.cloudinary.com', 'https://i.pravatar.cc'],
-      mediaSrc:       ["'self'", 'blob:', 'https://res.cloudinary.com'],
-      connectSrc: [
-        "'self'",
-        // WebSocket — derive from CLIENT_URL in prod, allow localhost in dev
-        isProd
-          ? (process.env.CLIENT_URL || '').replace(/^https?/, 'wss')
-          : 'ws://localhost:5000',
-        isProd
-          ? (process.env.CLIENT_URL || '').replace(/^https?/, 'wss')
-          : 'wss://localhost:5000',
-        process.env.CLIENT_URL || '',
-      ],
-      workerSrc:      ["'self'", 'blob:'],
-      objectSrc:      ["'none'"],
-      frameAncestors: ["'none'"],
-      upgradeInsecureRequests: isProd ? [] : null,
-    },
-  },
+  // Disable CSP in production — it was blocking API calls and cookie setting
+  // between Railway (backend) and Vercel (frontend) due to cross-origin issues
+  contentSecurityPolicy: false,
   hsts: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
 }));
 
