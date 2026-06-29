@@ -36,7 +36,7 @@ export const register = async (req, res) => {
     const userObj = user.toObject();
     delete userObj.password;
 
-    return res.status(201).json({ success: true, message: 'Welcome to VELA! 🌟', user: userObj });
+    return res.status(201).json({ success: true, message: 'Welcome to VELA! 🌟', user: userObj, token });
   } catch (err) {
     console.error('Register error:', err);
     if (err.code === 11000) {
@@ -76,7 +76,7 @@ export const login = async (req, res) => {
     const userObj = user.toObject();
     delete userObj.password;
 
-    return res.json({ success: true, message: 'Welcome back! ✨', user: userObj });
+    return res.json({ success: true, message: 'Welcome back! ✨', user: userObj, token });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ success: false, message: 'Server error during login.' });
@@ -87,7 +87,11 @@ export const login = async (req, res) => {
 // @route   POST /api/auth/logout
 export const logout = async (req, res) => {
   try {
-    const token = req.cookies?.vela_token;
+    // Support both Bearer token (cross-domain) and cookie (dev)
+    const authHeader = req.headers.authorization;
+    const token = (authHeader && authHeader.startsWith('Bearer '))
+      ? authHeader.slice(7)
+      : req.cookies?.vela_token;
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);

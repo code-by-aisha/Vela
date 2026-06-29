@@ -19,8 +19,12 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
+    // Send Bearer token in socket handshake so server can auth the socket connection
+    const token = localStorage.getItem('vela_token');
+
     const s = io(SOCKET_URL, {
       withCredentials: true,
+      auth: { token },
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,

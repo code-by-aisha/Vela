@@ -12,30 +12,42 @@ export const AuthProvider = ({ children }) => {
   const fetchMe = useCallback(async () => {
     didFinish.current = false;
 
-    // Increased timeouts for Railway cold starts (can take 3-5 seconds)
+    // If no token stored, don't even try — user is not logged in
+    const token = localStorage.getItem('vela_token');
+    if (!token) {
+      didFinish.current = true;
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     const hardStop = setTimeout(() => {
       if (!didFinish.current) {
         didFinish.current = true;
         setUser(null);
         setLoading(false);
       }
-    }, 10000); // was 3000 — Railway needs up to 5-8s on cold start
+    }, 10000);
 
     try {
       const controller = new AbortController();
-      const killSwitch = setTimeout(() => controller.abort(), 9000); // was 2500
+      const killSwitch = setTimeout(() => controller.abort(), 9000);
 
       const { data } = await api.get('/auth/me', {
         signal: controller.signal,
-        timeout: 9000, // was 2500
+        timeout: 9000,
       });
 
       clearTimeout(killSwitch);
 
       if (data?.success) setUser(data.user);
-      else setUser(null);
+      else {
+        setUser(null);
+        localStorage.removeItem('vela_token');
+      }
     } catch {
       setUser(null);
+      localStorage.removeItem('vela_token');
     } finally {
       clearTimeout(hardStop);
       if (!didFinish.current) {
@@ -50,9 +62,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
     if (data.success) {
+      // Store token in localStorage for reliable cross-domain auth
+      if (data.token) localStorage.setItem('vela_token', data.token);
       setUser(data.user);
-      // Re-fetch after login to confirm cookie is working
-      setTimeout(() => fetchMe(), 500);
     }
     return data;
   };
@@ -60,14 +72,15 @@ export const AuthProvider = ({ children }) => {
   const register = async (username, email, password) => {
     const { data } = await api.post('/auth/register', { username, email, password });
     if (data.success) {
+      if (data.token) localStorage.setItem('vela_token', data.token);
       setUser(data.user);
-      setTimeout(() => fetchMe(), 500);
     }
     return data;
   };
 
   const logout = async () => {
     audioManager.stop();
+    localStorage.removeItem('vela_token');
     try { await api.post('/auth/logout'); } catch {}
     finally { setUser(null); }
   };
