@@ -7,28 +7,27 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user,    setUser]    = useState(null);
   const [loading, setLoading] = useState(true);
-  const didFinish = useRef(false); // guard — setLoading(false) must only fire once
+  const didFinish = useRef(false);
 
   const fetchMe = useCallback(async () => {
     didFinish.current = false;
 
-    // Absolute hard deadline — app WILL show content after 3s no matter what
+    // Increased timeouts for Railway cold starts (can take 3-5 seconds)
     const hardStop = setTimeout(() => {
       if (!didFinish.current) {
         didFinish.current = true;
         setUser(null);
         setLoading(false);
       }
-    }, 3000);
+    }, 10000); // was 3000 — Railway needs up to 5-8s on cold start
 
     try {
-      // Use AbortController so the fetch actually cancels (axios timeout can hang on proxy)
       const controller = new AbortController();
-      const killSwitch = setTimeout(() => controller.abort(), 2500);
+      const killSwitch = setTimeout(() => controller.abort(), 9000); // was 2500
 
       const { data } = await api.get('/auth/me', {
         signal: controller.signal,
-        timeout: 2500,
+        timeout: 9000, // was 2500
       });
 
       clearTimeout(killSwitch);
@@ -50,24 +49,31 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    if (data.success) setUser(data.user);
+    if (data.success) {
+      setUser(data.user);
+      // Re-fetch after login to confirm cookie is working
+      setTimeout(() => fetchMe(), 500);
+    }
     return data;
   };
 
   const register = async (username, email, password) => {
     const { data } = await api.post('/auth/register', { username, email, password });
-    if (data.success) setUser(data.user);
+    if (data.success) {
+      setUser(data.user);
+      setTimeout(() => fetchMe(), 500);
+    }
     return data;
   };
 
   const logout = async () => {
-    audioManager.stop(); // stop any playing audio before clearing auth state
+    audioManager.stop();
     try { await api.post('/auth/logout'); } catch {}
     finally { setUser(null); }
   };
 
-  const updateUser   = (u) => setUser(u);
-  const refetchUser  = fetchMe;
+  const updateUser  = (u) => setUser(u);
+  const refetchUser = fetchMe;
 
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refetchUser }}>
