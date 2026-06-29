@@ -63,25 +63,30 @@ export const createMoment = async (req, res) => {
 export const getFeed = async (req, res) => {
   try {
     const currentUser = await User.findById(req.user._id).select('following');
-    // Always include the current user's own moments so fresh accounts see their posts
     const followingIds = [
       ...currentUser.following.map(id => id.toString()),
       req.user._id.toString(),
     ];
-    // Deduplicate in case user somehow followed themselves
     const uniqueIds = [...new Set(followingIds)];
 
-    const page = parseInt(req.query.page) || 1;
+    const page  = parseInt(req.query.page)  || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const skip  = (page - 1) * limit;
 
-    const moments = await Moment.find({ author: { $in: uniqueIds }, isReel: false })
+    // If user follows nobody (new account or empty follow list),
+    // show ALL moments as a discovery feed — same as Explore but personalised later
+    const isNewUser   = uniqueIds.length <= 1; // only themselves
+    const query       = isNewUser
+      ? { isReel: false }                        // show everything
+      : { author: { $in: uniqueIds }, isReel: false }; // show followed + self
+
+    const moments = await Moment.find(query)
       .populate('author', 'username profilePicture aura vibeScore')
       .populate('comments.user', 'username profilePicture aura')
       .populate('comments.replies.user', 'username profilePicture aura')
       .sort({ createdAt: -1 }).skip(skip).limit(limit);
 
-    const total = await Moment.countDocuments({ author: { $in: uniqueIds }, isReel: false });
+    const total = await Moment.countDocuments(query);
     res.json({ success: true, moments, total, page, pages: Math.ceil(total / limit), hasMore: skip + moments.length < total });
   } catch (err) {
     console.error('getFeed error:', err);

@@ -35,25 +35,21 @@ function getTransporter() {
     throw new Error('Email service not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env');
   }
 
-  const port   = parseInt(SMTP_PORT || '587');
-  const secure = SMTP_SECURE === 'true';   // true = SSL port 465, false = STARTTLS port 587
-
+  // Use port 465 with SSL — Railway blocks outbound port 587 (STARTTLS)
+  // but allows port 465. Gmail supports both.
   _transporter = nodemailer.createTransport({
-    host:   SMTP_HOST,
-    port,
-    secure,
+    host:   SMTP_HOST || 'smtp.gmail.com',
+    port:   465,
+    secure: true,    // true = SSL (port 465) — required for Railway
     auth:   { user: SMTP_USER, pass: SMTP_PASS },
-    // Required for Railway — longer timeouts + force IPv4
-    connectionTimeout: 10000,
-    greetingTimeout:   10000,
-    socketTimeout:     15000,
+    connectionTimeout: 15000,
+    greetingTimeout:   15000,
+    socketTimeout:     20000,
     tls: {
       rejectUnauthorized: false,
-      // Force TLS 1.2+ for Gmail compatibility
       minVersion: 'TLSv1.2',
     },
-    // Force IPv4 — Railway sometimes routes IPv6 which Gmail blocks
-    family: 4,
+    family: 4,  // Force IPv4
   });
 
   return _transporter;
