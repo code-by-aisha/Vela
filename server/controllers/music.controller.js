@@ -180,8 +180,23 @@ export const getMusic = async (req, res) => {
         ],
       };
     }
-    const tracks = await Music.find(query).sort({ usageCount: -1, createdAt: 1 });
-    res.json({ success: true, music: tracks });
+    const tracks = await Music.find(query).sort({ usageCount: -1, createdAt: 1 }).lean();
+
+    // CRITICAL: audioUrl is stored as a relative path ('/audio/song.mp3').
+    // This only works when frontend + backend share the same origin (dev,
+    // via Vite proxy). In production the frontend is on Vercel and backend
+    // on Railway — a relative path resolves against Vercel's domain, which
+    // has no audio files, causing "Could not load audio" for every track.
+    // Fix: rewrite to an absolute URL pointing at THIS server.
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const fixedTracks = tracks.map(t => ({
+      ...t,
+      audioUrl: t.audioUrl?.startsWith('/audio')
+        ? `${origin}${t.audioUrl}`
+        : t.audioUrl,
+    }));
+
+    res.json({ success: true, music: fixedTracks });
   } catch (err) {
     console.error('getMusic error:', err);
     res.status(500).json({ success: false, message: 'Server error retrieving music.' });

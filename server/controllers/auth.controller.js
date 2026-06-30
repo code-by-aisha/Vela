@@ -147,11 +147,13 @@ export const updatePassword = async (req, res) => {
 // @desc    Request password reset
 // @route   POST /api/auth/forgot-password
 export const forgotPassword = async (req, res) => {
+  console.log('🔐 forgotPassword called for:', req.body?.email);
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
 
     const user = await User.findOne({ email: email.toLowerCase() });
+    console.log('🔐 User lookup result:', user ? `found (${user._id})` : 'not found');
     if (!user) {
       // Prevent email enumeration — always return the same message
       return res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
