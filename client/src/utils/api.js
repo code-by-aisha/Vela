@@ -9,16 +9,24 @@ const BASE = import.meta.env.VITE_API_URL
 const api = axios.create({
   baseURL: BASE,
   withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
+  // NOTE: No default Content-Type header here.
+  // Axios auto-sets 'application/json' for plain objects and
+  // 'multipart/form-data; boundary=...' for FormData automatically.
+  // A hardcoded default here breaks file uploads (profile picture, cover
+  // photo, moments with media) because it overrides the auto-generated
+  // multipart boundary, causing the server's multer parser to fail with 500.
   timeout: 15000,
 });
 
 // Attach token from localStorage to every request
-// This is the reliable cross-domain auth method (Vercel ↔ Railway)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('vela_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // Only set JSON content-type for plain object bodies — never for FormData
+  if (config.data && !(config.data instanceof FormData) && !config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
   }
   return config;
 });

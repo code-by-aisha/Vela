@@ -37,9 +37,7 @@ export default function CreateMomentModal({ onClose, onCreated, initialCaption =
       if (music) formData.append('music', JSON.stringify(music));
       files.forEach(f => formData.append('media', f));
 
-      const { data } = await api.post('/moments', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const { data } = await api.post('/moments', formData);
 
       if (data.success) {
         toast.success('Moment shared! ✨');

@@ -71,9 +71,9 @@ function SelectOption({ label, sublabel, value, onChange, options }) {
 // ─── Section Card ─────────────────────────────────────────────────────────────
 function SectionCard({ title, icon: Icon, children }) {
   return (
-    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--bg-glass-border)', borderRadius: 'var(--radius-xl)', padding: 'clamp(16px, 4vw, 24px)', marginBottom: 16 }}>
+    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--bg-glass-border)', borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'white' }}>
-        {Icon && <Icon style={{ color: 'var(--accent)', flexShrink: 0 }} size={17} />} {title}
+        {Icon && <Icon style={{ color: 'var(--accent)' }} size={17} />} {title}
       </h2>
       {children}
     </div>
@@ -86,17 +86,14 @@ function Tab({ active, onClick, icon: Icon, label }) {
     <button
       onClick={onClick}
       style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        padding: '9px 14px', borderRadius: 12, flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 12,
         background: active ? 'var(--accent-dim)' : 'transparent',
         border: active ? '1px solid rgba(167,139,250,0.2)' : '1px solid transparent',
         color: active ? 'var(--accent)' : 'var(--text-secondary)',
-        fontSize: 13, fontWeight: 600, cursor: 'pointer',
-        transition: 'all 0.2s', whiteSpace: 'nowrap',
-        minHeight: 40,
+        fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
       }}
     >
-      <Icon size={15} /> {label}
+      <Icon size={16} /> {label}
     </button>
   );
 }
@@ -146,7 +143,9 @@ export default function SettingsPage() {
       fd.append('username', username);
       if (profileFile) fd.append('profilePicture', profileFile);
       if (coverFile) fd.append('coverPhoto', coverFile);
-      const { data } = await api.put('/users/profile/update', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      // Don't set Content-Type manually — axios auto-generates the correct
+      // multipart boundary for FormData. A hardcoded header here breaks uploads.
+      const { data } = await api.put('/users/profile/update', fd);
       if (data.success) { toast.success('Profile updated! ✨'); await refetchUser(); }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not update profile.');
@@ -191,11 +190,11 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: 'clamp(16px, 4vw, 24px) clamp(12px, 4vw, 16px) 80px', width: '100%' }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(20px, 5vw, 24px)', fontWeight: 800, marginBottom: 20 }}>Settings</h1>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 16px 80px' }}>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, marginBottom: 24 }}>Settings</h1>
 
-      {/* Tab bar — scrollable on mobile, no tab clipping */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 20, paddingBottom: 4, scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 24, paddingBottom: 4, scrollbarWidth: 'none' }}>
         {TABS.map(t => (
           <Tab key={t.key} active={tab === t.key} onClick={() => setTab(t.key)} icon={t.icon} label={t.label} />
         ))}

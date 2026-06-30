@@ -420,7 +420,7 @@ export default function MessagesPage() {
         fd.append('text', tempText);
         fd.append('image', tempFile);
         if (tempReply) fd.append('replyToId', tempReply._id);
-        res = await api.post(`/messages/${activeConv._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        res = await api.post(`/messages/${activeConv._id}`, fd);
       } else {
         res = await api.post(`/messages/${activeConv._id}`, { text: tempText, replyToId: tempReply?._id });
       }

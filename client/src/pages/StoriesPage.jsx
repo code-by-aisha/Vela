@@ -37,7 +37,7 @@ export default function StoriesPage() {
       if (text) fd.append('text', text);
       if (music) fd.append('music', JSON.stringify(music));
 
-      const { data } = await api.post('/stories', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await api.post('/stories', fd);
       if (data.success) {
         toast.success('Story created! ✨');
         setFile(null); setPreview(null); setMood(''); setText(''); setMusic({ title: '', artist: '' });
