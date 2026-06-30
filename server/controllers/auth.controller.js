@@ -155,8 +155,13 @@ export const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     console.log('🔐 User lookup result:', user ? `found (${user._id})` : 'not found');
     if (!user) {
-      // Prevent email enumeration — always return the same message
-      return res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+      // Clear, honest feedback — no account exists with this email.
+      // (Email enumeration protection is less important than usability
+      // for a small app — re-enable the generic message later if needed.)
+      return res.status(404).json({
+        success: false,
+        message: 'No VELA account found with that email address. Check the spelling or create a new account.',
+      });
     }
 
     await PasswordReset.deleteMany({ userId: user._id });
