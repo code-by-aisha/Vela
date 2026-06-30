@@ -62,6 +62,14 @@ export const getStoryFeed = async (req, res) => {
       .populate('author', 'username profilePicture aura vibeScore')
       .sort({ createdAt: -1 });
 
+    // Fix relative /audio paths — same cross-domain issue as moments
+    const origin = `${req.protocol}://${req.get('host')}`;
+    stories.forEach(s => {
+      if (s?.music?.audioUrl?.startsWith('/audio')) {
+        s.music.audioUrl = `${origin}${s.music.audioUrl}`;
+      }
+    });
+
     // Group by author
     const grouped = {};
     for (const story of stories) {
@@ -121,6 +129,14 @@ export const getUserStories = async (req, res) => {
     const stories = await Story.find({ author: req.params.userId })
       .populate('author', 'username profilePicture aura')
       .sort({ createdAt: -1 });
+
+    const origin = `${req.protocol}://${req.get('host')}`;
+    stories.forEach(s => {
+      if (s?.music?.audioUrl?.startsWith('/audio')) {
+        s.music.audioUrl = `${origin}${s.music.audioUrl}`;
+      }
+    });
+
     res.json({ success: true, stories });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

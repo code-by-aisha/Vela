@@ -6,6 +6,21 @@ import { pushNotification } from '../utils/notify.js';
 const getIo = (req) => req.app.get('io');
 const REACTION_TYPES = ['beautiful','funny','love','fire','mindBlown','sad','crazy','wholesome','aesthetic','respect'];
 
+// Same fix as music.controller.js getMusic(): moment.music.audioUrl can be a
+// relative path ('/audio/song.mp3') stored before the music library URL fix
+// was deployed. Rewrite it to an absolute URL pointing at THIS server so it
+// works regardless of which domain the frontend is hosted on (Vercel ≠ Railway).
+const fixMomentAudioUrls = (moments, req) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const list = Array.isArray(moments) ? moments : [moments];
+  list.forEach(m => {
+    if (m?.music?.audioUrl?.startsWith('/audio')) {
+      m.music.audioUrl = `${origin}${m.music.audioUrl}`;
+    }
+  });
+  return moments;
+};
+
 // @desc    Create a Moment
 export const createMoment = async (req, res) => {
   try {
@@ -87,6 +102,7 @@ export const getFeed = async (req, res) => {
       .sort({ createdAt: -1 }).skip(skip).limit(limit);
 
     const total = await Moment.countDocuments(query);
+    fixMomentAudioUrls(moments, req);
     res.json({ success: true, moments, total, page, pages: Math.ceil(total / limit), hasMore: skip + moments.length < total });
   } catch (err) {
     console.error('getFeed error:', err);
@@ -104,6 +120,7 @@ export const getExploreMoments = async (req, res) => {
       .populate('comments.replies.user', 'username profilePicture aura')
       .sort({ views: -1, createdAt: -1 })
       .limit(limit);
+    fixMomentAudioUrls(moments, req);
     res.json({ success: true, moments });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -271,6 +288,7 @@ export const getSavedMoments = async (req, res) => {
     const moments = await Moment.find({ savedBy: req.user._id })
       .populate('author', 'username profilePicture aura')
       .sort({ createdAt: -1 });
+    fixMomentAudioUrls(moments, req);
     res.json({ success: true, moments });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

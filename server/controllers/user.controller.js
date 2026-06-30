@@ -211,6 +211,16 @@ export const getUserMoments = async (req, res) => {
       .populate('author', 'username profilePicture aura')
       .sort({ createdAt: -1 })
       .limit(30);
+
+    // Fix relative /audio paths the same way moment.controller.js does —
+    // stored music URLs from before the cross-domain fix need rewriting.
+    const origin = `${req.protocol}://${req.get('host')}`;
+    moments.forEach(m => {
+      if (m?.music?.audioUrl?.startsWith('/audio')) {
+        m.music.audioUrl = `${origin}${m.music.audioUrl}`;
+      }
+    });
+
     res.json({ success: true, moments });
   } catch (err) {
     console.error('getUserMoments error:', err);
