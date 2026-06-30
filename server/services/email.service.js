@@ -63,7 +63,13 @@ function getTransporter() {
  */
 export const sendPasswordResetEmail = async (to, username, resetUrl) => {
   const transporter = getTransporter();
-  const from = process.env.EMAIL_FROM || `"VELA" <noreply@vela.app>`;
+
+  // Gmail REQUIRES the From address to match (or be a verified alias of) the
+  // authenticated SMTP_USER account, or it silently drops the message.
+  // Build From using SMTP_USER as the actual email, with a display name.
+  const fromName  = 'VELA';
+  const fromEmail = process.env.SMTP_USER; // must match Gmail login exactly
+  const from = `"${fromName}" <${fromEmail}>`;
 
   const html = `
 <!DOCTYPE html>
@@ -155,5 +161,16 @@ export const sendPasswordResetEmail = async (to, username, resetUrl) => {
     html,
   });
 
+  // CRITICAL: nodemailer can resolve successfully even when Gmail silently
+  // rejects the recipient (e.g. 'from' address doesn't match authenticated
+  // SMTP_USER, triggering spoofing protection). Verify actual acceptance.
+  if (!info.accepted || info.accepted.length === 0) {
+    throw new Error(
+      `Gmail rejected the recipient. Rejected: ${JSON.stringify(info.rejected)}. ` +
+      `Response: ${info.response}`
+    );
+  }
+
+  console.log(`✅ Email accepted by Gmail for: ${info.accepted.join(', ')}`);
   return info;
 };
