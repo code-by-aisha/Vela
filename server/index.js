@@ -111,6 +111,19 @@ const apiLimiter = rateLimit({
   skip: () => !isProd,
 });
 
+// Disable ETag-based caching on all API routes. Express auto-generates ETags
+// which causes browsers to send "If-None-Match" and receive 304 Not Modified
+// with STALE data — this was the exact cause of the feed showing 0 moments
+// even after the backend fix was deployed (browser kept reusing the old
+// empty-feed response instead of re-fetching).
+app.set('etag', false);
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 app.use('/api/auth', authLimiter);
 app.use('/api',      apiLimiter);
 
