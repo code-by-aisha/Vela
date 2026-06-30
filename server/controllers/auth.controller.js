@@ -152,8 +152,18 @@ export const forgotPassword = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const searchEmail = email.toLowerCase().trim();
+    console.log('🔐 Searching for email:', JSON.stringify(searchEmail), '| DB name:', User.db.name);
+
+    const user = await User.findOne({ email: searchEmail });
     console.log('🔐 User lookup result:', user ? `found (${user._id})` : 'not found');
+
+    // Diagnostic: if not found, show what emails DO exist (first 10, masked)
+    if (!user) {
+      const allUsers = await User.find({}, 'email').limit(10).lean();
+      console.log('🔐 Emails actually in DB:', allUsers.map(u => JSON.stringify(u.email)));
+    }
+
     if (!user) {
       // Clear, honest feedback — no account exists with this email.
       // (Email enumeration protection is less important than usability
