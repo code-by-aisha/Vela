@@ -31,6 +31,15 @@ function getTransporter() {
 
   const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
 
+  // Diagnostic: log exactly which variables are present/missing (never log the password value)
+  console.log('SMTP config check:', {
+    SMTP_HOST:   SMTP_HOST   ? `SET (${SMTP_HOST})` : 'MISSING',
+    SMTP_PORT:   SMTP_PORT   ? `SET (${SMTP_PORT})` : 'MISSING',
+    SMTP_SECURE: SMTP_SECURE ? `SET (${SMTP_SECURE})` : 'MISSING',
+    SMTP_USER:   SMTP_USER   ? `SET (${SMTP_USER})` : 'MISSING',
+    SMTP_PASS:   SMTP_PASS   ? `SET (length: ${SMTP_PASS.length})` : 'MISSING',
+  });
+
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     throw new Error('Email service not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env');
   }
