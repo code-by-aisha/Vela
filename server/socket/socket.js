@@ -7,12 +7,19 @@ export const initSocket = (io, app) => {
   // ── Auth middleware — reject unauthenticated socket connections ──────────
   io.use(async (socket, next) => {
     try {
-      // Cookie sent as handshake header (Socket.IO sends cookies automatically)
-      const raw = socket.handshake.headers?.cookie || '';
-      const match = raw.match(/vela_token=([^;]+)/);
-      if (!match) return next(new Error('Unauthorized'));
+      // Primary: Bearer token sent via handshake auth (cross-domain — Vercel→Railway)
+      let token = socket.handshake.auth?.token;
 
-      const decoded = jwt.verify(match[1], process.env.JWT_SECRET);
+      // Fallback: cookie (works only same-domain / dev)
+      if (!token) {
+        const raw = socket.handshake.headers?.cookie || '';
+        const match = raw.match(/vela_token=([^;]+)/);
+        if (match) token = match[1];
+      }
+
+      if (!token) return next(new Error('Unauthorized'));
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.userId?.toString();
       if (!socket.userId) return next(new Error('Unauthorized'));
       next();

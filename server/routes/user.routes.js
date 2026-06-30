@@ -9,7 +9,20 @@ const router = express.Router();
 router.get('/suggested', protect, getSuggestions);
 router.get('/:username', protect, getUserProfile);
 router.get('/:username/moments', protect, getUserMoments);
-router.put('/profile/update', protect, uploadImage.fields([{ name: 'profilePicture', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }]), updateProfile);
+router.put(
+  '/profile/update',
+  protect,
+  (req, res, next) => {
+    uploadImage.fields([{ name: 'profilePicture', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }])(req, res, (err) => {
+      if (err) {
+        console.error('Multer upload error:', err.message);
+        return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
+      }
+      next();
+    });
+  },
+  updateProfile
+);
 router.post('/:id/follow', protect, toggleFollow);
 router.get('/:id/followers', protect, getFollowers);
 router.get('/:id/following', protect, getFollowing);

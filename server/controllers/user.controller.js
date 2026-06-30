@@ -15,7 +15,8 @@ export const getMe = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
     res.json({ success: true, user });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('updateProfile error:', err.message, err.stack);
+    res.status(500).json({ success: false, message: err.message || 'Server error.' });
   }
 };
 
@@ -69,7 +70,7 @@ export const updateProfile = async (req, res) => {
     if (bio !== undefined) updateData.bio = bio;
 
     if (username && username !== req.user.username) {
-      const exists = await User.findOne({ username });
+      const exists = await User.findOne({ username, _id: { $ne: req.user._id } });
       if (exists) return res.status(409).json({ success: false, message: 'Username already taken.' });
       updateData.username = username;
     }
@@ -79,14 +80,24 @@ export const updateProfile = async (req, res) => {
     const coverFile   = req.files?.coverPhoto?.[0];
 
     if (profileFile) {
-      const { uploadProfilePicture } = await import('../services/cloudinary.service.js');
-      const result = await uploadProfilePicture(profileFile.buffer);
-      updateData.profilePicture = result.url;
+      try {
+        const { uploadProfilePicture } = await import('../services/cloudinary.service.js');
+        const result = await uploadProfilePicture(profileFile.buffer);
+        updateData.profilePicture = result.url;
+      } catch (uploadErr) {
+        console.error('Cloudinary profile upload failed:', uploadErr.message);
+        return res.status(502).json({ success: false, message: 'Image upload failed. Check Cloudinary configuration.' });
+      }
     }
 
     if (coverFile) {
-      const result = await uploadImage(coverFile.buffer, 'vela/covers');
-      updateData.coverPhoto = result.url;
+      try {
+        const result = await uploadImage(coverFile.buffer, 'vela/covers');
+        updateData.coverPhoto = result.url;
+      } catch (uploadErr) {
+        console.error('Cloudinary cover upload failed:', uploadErr.message);
+        return res.status(502).json({ success: false, message: 'Image upload failed. Check Cloudinary configuration.' });
+      }
     }
 
     const user = await User.findByIdAndUpdate(
