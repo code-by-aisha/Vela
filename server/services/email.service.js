@@ -1,85 +1,54 @@
 /**
  * VELA Email Service
  * ------------------
- * Uses Nodemailer with any SMTP provider.
+ * Uses Resend (https://resend.com) — sends email over a normal HTTPS API
+ * call instead of raw SMTP. This is REQUIRED on Railway, which blocks/throttles
+ * outbound SMTP ports (25, 465, 587) on most plans, causing "Connection timeout"
+ * even with correct Gmail credentials.
  *
- * Required env vars:
- *   SMTP_HOST     — e.g. smtp.gmail.com | smtp.sendgrid.net | mail.privateemail.com
- *   SMTP_PORT     — e.g. 465 (SSL) or 587 (TLS/STARTTLS)
- *   SMTP_SECURE   — "true" for port 465, "false" for 587
- *   SMTP_USER     — your email address / API key username
- *   SMTP_PASS     — your email password / API key
- *   EMAIL_FROM    — "VELA <noreply@yourdomain.com>"
- *
- * For Gmail:
- *   SMTP_HOST=smtp.gmail.com  SMTP_PORT=587  SMTP_SECURE=false
- *   SMTP_USER=youraddress@gmail.com  SMTP_PASS=your-app-password
- *   (Enable 2FA on Google account, then generate an App Password)
- *
- * For SendGrid:
- *   SMTP_HOST=smtp.sendgrid.net  SMTP_PORT=587  SMTP_SECURE=false
- *   SMTP_USER=apikey  SMTP_PASS=SG.xxxx...
+ * Setup (free — 3,000 emails/month, 100/day):
+ *   1. Go to resend.com → sign up (no credit card needed)
+ *   2. Go to API Keys → Create API Key → copy it
+ *   3. In Railway → Variables, add:
+ *        RESEND_API_KEY = re_xxxxxxxxxxxxxxxxxxxxxxxx
+ *        EMAIL_FROM      = VELA <onboarding@resend.dev>   (works immediately,
+ *                           no domain verification needed for testing)
+ *   4. (Optional, for production) Verify your own domain in Resend to send
+ *      from your own address instead of onboarding@resend.dev
  */
 
-import nodemailer from 'nodemailer';
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
-// Lazy-create transporter so missing env vars don't crash the server on boot
-let _transporter = null;
-
-function getTransporter() {
-  if (_transporter) return _transporter;
-
-  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
-
-  // Diagnostic: log exactly which variables are present/missing (never log the password value)
-  console.log('SMTP config check:', {
-    SMTP_HOST:   SMTP_HOST   ? `SET (${SMTP_HOST})` : 'MISSING',
-    SMTP_PORT:   SMTP_PORT   ? `SET (${SMTP_PORT})` : 'MISSING',
-    SMTP_SECURE: SMTP_SECURE ? `SET (${SMTP_SECURE})` : 'MISSING',
-    SMTP_USER:   SMTP_USER   ? `SET (${SMTP_USER})` : 'MISSING',
-    SMTP_PASS:   SMTP_PASS   ? `SET (length: ${SMTP_PASS.length})` : 'MISSING',
-  });
-
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    throw new Error('Email service not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env');
+async function sendViaResend({ to, subject, html, text }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('Email service not configured. Set RESEND_API_KEY in Railway Variables.');
   }
 
-  // Use port 465 with SSL — Railway blocks outbound port 587 (STARTTLS)
-  // but allows port 465. Gmail supports both.
-  _transporter = nodemailer.createTransport({
-    host:   SMTP_HOST || 'smtp.gmail.com',
-    port:   465,
-    secure: true,    // true = SSL (port 465) — required for Railway
-    auth:   { user: SMTP_USER, pass: SMTP_PASS },
-    connectionTimeout: 15000,
-    greetingTimeout:   15000,
-    socketTimeout:     20000,
-    tls: {
-      rejectUnauthorized: false,
-      minVersion: 'TLSv1.2',
+  const from = process.env.EMAIL_FROM || 'VELA <onboarding@resend.dev>';
+
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
-    family: 4,  // Force IPv4
+    body: JSON.stringify({ from, to, subject, html, text }),
+    // HTTPS API call — fast, reliable, never blocked by Railway's network policy
+    signal: AbortSignal.timeout(10000),
   });
 
-  return _transporter;
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(`Resend API error (${res.status}): ${data.message || JSON.stringify(data)}`);
+  }
+
+  console.log(`✅ Email sent via Resend, id: ${data.id}`);
+  return data;
 }
 
-/**
- * Send a password-reset email.
- * @param {string} to        recipient email
- * @param {string} username  recipient username (for personalisation)
- * @param {string} resetUrl  full reset link
- */
 export const sendPasswordResetEmail = async (to, username, resetUrl) => {
-  const transporter = getTransporter();
-
-  // Gmail REQUIRES the From address to match (or be a verified alias of) the
-  // authenticated SMTP_USER account, or it silently drops the message.
-  // Build From using SMTP_USER as the actual email, with a display name.
-  const fromName  = 'VELA';
-  const fromEmail = process.env.SMTP_USER; // must match Gmail login exactly
-  const from = `"${fromName}" <${fromEmail}>`;
-
   const html = `
 <!DOCTYPE html>
 <html>
@@ -88,73 +57,32 @@ export const sendPasswordResetEmail = async (to, username, resetUrl) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reset your VELA password</title>
 </head>
-<body style="margin:0;padding:0;background:#0a0a0f;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 16px;">
+<body style="margin:0;padding:0;background:#0a0a0f;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="540" cellpadding="0" cellspacing="0"
-          style="background:linear-gradient(135deg,#111118,#0f0d12);border:1px solid rgba(255,255,255,0.08);border-radius:20px;overflow:hidden;max-width:100%;">
-
-          <!-- Header -->
+        <table width="480" cellpadding="0" cellspacing="0" style="background:#15131a;border-radius:20px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
           <tr>
-            <td style="padding:36px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">
-              <table cellpadding="0" cellspacing="0">
-                <tr>
-                  <td>
-                    <div style="font-family:'Cabinet Grotesk','Clash Display',Arial,sans-serif;font-size:24px;font-weight:800;background:linear-gradient(135deg,#533747,#A78BFA,#86BBBD);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block;">
-                      VELA
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding:36px 40px;">
-              <p style="font-size:15px;color:rgba(255,255,255,0.5);margin:0 0 10px;">Hey @${username},</p>
-              <h1 style="font-size:26px;font-weight:800;color:#ffffff;margin:0 0 16px;line-height:1.2;">
-                Reset your password
-              </h1>
-              <p style="font-size:14px;color:rgba(255,255,255,0.45);line-height:1.7;margin:0 0 28px;">
-                We received a request to reset your VELA password. Click the button below to choose a new one.
-                This link expires in <strong style="color:rgba(255,255,255,0.7);">1 hour</strong>.
+            <td style="padding:40px 32px;text-align:center;">
+              <div style="font-family:Arial,sans-serif;font-size:24px;font-weight:800;background:linear-gradient(135deg,#533747,#A78BFA,#86BBBD);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block;margin-bottom:24px;">
+                VELA
+              </div>
+              <h1 style="color:#fff;font-size:20px;margin:0 0 12px;">Reset your password</h1>
+              <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.6;margin:0 0 28px;">
+                Hi @${username}, click below to set a new password. This link expires in 1 hour.
               </p>
-
-              <!-- CTA Button -->
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-                <tr>
-                  <td style="border-radius:12px;background:linear-gradient(135deg,#533747,#A78BFA,#86BBBD);padding:1px;">
-                    <a href="${resetUrl}"
-                      style="display:inline-block;padding:14px 36px;border-radius:11px;background:linear-gradient(135deg,#533747,#A78BFA,#86BBBD);color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;font-family:'Segoe UI',Arial,sans-serif;">
-                      Reset Password ✨
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="font-size:12px;color:rgba(255,255,255,0.25);margin:0 0 8px;">Or paste this link into your browser:</p>
-              <p style="font-size:11px;color:rgba(167,139,250,0.6);word-break:break-all;margin:0 0 28px;">${resetUrl}</p>
-
-              <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:0 0 24px;" />
-
-              <p style="font-size:12px;color:rgba(255,255,255,0.22);margin:0;line-height:1.6;">
-                If you didn't request a password reset, you can safely ignore this email —
-                your account is secure and nothing has changed.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 40px;border-top:1px solid rgba(255,255,255,0.04);text-align:center;">
-              <p style="font-size:11px;color:rgba(255,255,255,0.18);margin:0;">
-                © ${new Date().getFullYear()} VELA · Share Your Vibe
+              <a href="${resetUrl}" style="display:inline-block;padding:14px 32px;border-radius:12px;background:linear-gradient(135deg,#533747,#A78BFA);color:#fff;text-decoration:none;font-weight:700;font-size:15px;">
+                Reset Password
+              </a>
+              <p style="color:rgba(255,255,255,0.3);font-size:11px;margin:28px 0 0;word-break:break-all;">
+                ${resetUrl}
               </p>
             </td>
           </tr>
         </table>
+        <p style="color:rgba(255,255,255,0.2);font-size:11px;margin-top:20px;">
+          If you didn't request this, you can safely ignore this email.
+        </p>
       </td>
     </tr>
   </table>
@@ -162,24 +90,10 @@ export const sendPasswordResetEmail = async (to, username, resetUrl) => {
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
-    from,
+  return sendViaResend({
     to,
     subject: '🔑 Reset your VELA password',
     text: `Hi @${username},\n\nReset your VELA password here:\n${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.\n\n— VELA`,
     html,
   });
-
-  // CRITICAL: nodemailer can resolve successfully even when Gmail silently
-  // rejects the recipient (e.g. 'from' address doesn't match authenticated
-  // SMTP_USER, triggering spoofing protection). Verify actual acceptance.
-  if (!info.accepted || info.accepted.length === 0) {
-    throw new Error(
-      `Gmail rejected the recipient. Rejected: ${JSON.stringify(info.rejected)}. ` +
-      `Response: ${info.response}`
-    );
-  }
-
-  console.log(`✅ Email accepted by Gmail for: ${info.accepted.join(', ')}`);
-  return info;
 };
